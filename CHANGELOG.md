@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-09
+
+### Fixed
+- **Reference searches now use OpenGrok's REST API `symbol` parameter.** The
+  server previously sent the legacy web-UI `refs` parameter to `/api/v1/search`,
+  which returned HTTP 400 on affected OpenGrok instances and disabled
+  `search_symbol_references` during capability probing.
+
 ## [0.6.0] - 2026-08-01
 
 ### Security
