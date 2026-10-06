@@ -6,11 +6,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -286,7 +288,16 @@ func (c *Client) Search(ctx context.Context, req SearchRequest) (SearchResult, e
 	return response.toResult(req.Projects, c.defaultProject), nil
 }
 
+// ErrInvalidFilePath reports a file path with a ".." segment. Such a path
+// could resolve outside the requested project, so it is rejected before any
+// request is sent.
+var ErrInvalidFilePath = errors.New(`file path must not contain ".." segments`)
+
 func (c *Client) FileContent(ctx context.Context, project string, filePath string) (string, error) {
+	if slices.Contains(strings.Split(filePath, "/"), "..") {
+		return "", fmt.Errorf("file content: %w", ErrInvalidFilePath)
+	}
+
 	query := url.Values{}
 	contentPath := filePath
 	if project != "" {
@@ -315,8 +326,15 @@ func (c *Client) FileContent(ctx context.Context, project string, filePath strin
 	return response.Contents, nil
 }
 
+// rawFilePath builds the escaped web /raw path. Each segment is escaped so
+// file names containing '#', '?', '%' or spaces reach the server intact
+// instead of truncating the path, starting a query string, or failing to parse.
 func rawFilePath(project string, filePath string) string {
-	return "/raw/" + strings.TrimSuffix(project, "/") + "/" + strings.TrimPrefix(filePath, "/")
+	segments := strings.Split(strings.TrimPrefix(filePath, "/"), "/")
+	for i, segment := range segments {
+		segments[i] = url.PathEscape(segment)
+	}
+	return "/raw/" + url.PathEscape(strings.TrimSuffix(project, "/")) + "/" + strings.Join(segments, "/")
 }
 
 func (c *Client) do(ctx context.Context, path string, query url.Values) ([]byte, error) {
